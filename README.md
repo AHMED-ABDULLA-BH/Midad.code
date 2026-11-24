@@ -11,7 +11,7 @@
 | macOS على Apple Silicon وIntel | [صورة القرص DMG](https://github.com/AHMED-ABDULLA-BH/Midad.code/releases/download/v0.5.0/Midad-0.5.0-macOS-universal.dmg) | افتح صورة القرص واسحب **مداد** إلى **Applications**. |
 | Windows 10 و11، معمارية x64 | [مثبّت Windows](https://github.com/AHMED-ABDULLA-BH/Midad.code/releases/download/v0.5.0/Midad-0.5.0-Windows-x64.exe) | شغّل المثبّت ثم افتح **Midad** من قائمة ابدأ. يتم التثبيت لحساب المستخدم الحالي. |
 
-تتوفر بصمات SHA-256 في [صفحة الإصدار](https://github.com/AHMED-ABDULLA-BH/Midad.code/releases/tag/v0.5.0). حزمة macOS ذات توقيع محلي ولم توثّقها Apple. مثبّت Windows غير موقّع بشهادة ناشر تجارية.
+تتوفر بصمات SHA-256 في [صفحة الإصدار](https://github.com/AHMED-ABDULLA-BH/Midad.code/releases/tag/v0.5.0). وقّع فريق **Ahmed Al Mulla** تطبيق مداد للماك بشهادة Developer ID Application. وثّقت Apple التطبيق، وتذكرة التوثيق مرفقة به داخل صورة القرص. مثبّت Windows غير موقّع بشهادة ناشر تجارية.
 
 ## جرّب لوحة
 
