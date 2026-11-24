@@ -1,10 +1,10 @@
 param(
     [Parameter(Mandatory, ParameterSetName='Installer')][string]$Installer,
-    [Parameter(Mandatory, ParameterSetName='Installed')][string]$InstalledDirectory
+    [Parameter(Mandatory, ParameterSetName='Installed')][string]$AppUserModelId
 )
 $ErrorActionPreference = 'Stop'
 $root = Join-Path ([IO.Path]::GetTempPath()) ("midad-test-" + [guid]::NewGuid().ToString('N'))
-$install = if ($InstalledDirectory) { $InstalledDirectory } else { Join-Path $root 'app' }
+$install = Join-Path $root 'app'
 New-Item -ItemType Directory -Path $root | Out-Null
 $process = $null
 Add-Type -AssemblyName System.Drawing
@@ -12,7 +12,22 @@ Add-Type @'
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
+[ComImport, Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")]
+public class ApplicationActivationManager { }
+[ComImport, Guid("2E941141-7F97-4756-BA1D-9DECDE894A3D"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IApplicationActivationManager {
+    void ActivateApplication([MarshalAs(UnmanagedType.LPWStr)] string appId,
+        [MarshalAs(UnmanagedType.LPWStr)] string arguments, uint options, out uint processId);
+}
 public static class NativeStudio {
+    public static int Activate(string appId, string file) {
+        var manager = (IApplicationActivationManager)new ApplicationActivationManager();
+        try {
+            uint pid;
+            manager.ActivateApplication(appId, "\"" + file + "\"", 0, out pid);
+            return checked((int)pid);
+        } finally { Marshal.ReleaseComObject(manager); }
+    }
     [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr w, int id);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr SendMessageW(IntPtr w, uint m, IntPtr a, string text);
     [DllImport("user32.dll", EntryPoint="SendMessageW")] public static extern IntPtr Command(IntPtr w, uint m, IntPtr a, IntPtr b);
@@ -24,7 +39,11 @@ public static class NativeStudio {
 }
 '@
 function Launch([string]$file) {
-    $p = Start-Process (Join-Path $install 'midad.exe') -ArgumentList ('"' + $file + '"') -PassThru
+    if ($AppUserModelId) {
+        $p = Get-Process -Id ([NativeStudio]::Activate($AppUserModelId, $file))
+    } else {
+        $p = Start-Process (Join-Path $install 'midad.exe') -ArgumentList ('"' + $file + '"') -PassThru
+    }
     for ($i=0; $i -lt 100; $i++) {
         $p.Refresh()
         if ($p.HasExited) { throw 'The editor exited during startup' }
@@ -50,7 +69,7 @@ try {
     $w=$process.MainWindowHandle
     if ((Read-Line $w) -ne $sample) { throw 'Editor did not load the example text' }
     $screenshot = 'studio-windows.png'
-    if ($InstalledDirectory) {
+    if ($AppUserModelId) {
         if (![NativeStudio]::MoveWindow($w, 0, 0, 1440, 900, $true)) { throw 'Could not resize the Store screenshot window' }
         $screenshot = 'studio-windows-store.png'
     }
@@ -60,7 +79,7 @@ try {
     $g=[Drawing.Graphics]::FromImage($bmp)
     $dc=$g.GetHdc()
     try { $captured=[NativeStudio]::PrintWindow($w,$dc,2) } finally { $g.ReleaseHdc($dc);$g.Dispose() }
-    if (!$captured -and $InstalledDirectory) { throw 'Store screenshot capture failed' }
+    if (!$captured -and $AppUserModelId) { throw 'Store screenshot capture failed' }
     if($captured){ $bmp.Save((Join-Path (Resolve-Path "$PSScriptRoot/../target").Path $screenshot),[Drawing.Imaging.ImageFormat]::Png) }
     $bmp.Dispose()
     $edited='حبر مداد'

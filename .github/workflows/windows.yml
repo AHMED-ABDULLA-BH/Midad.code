@@ -81,7 +81,7 @@ jobs:
             Add-AppxPackage -Path $signed
             $installed = Get-AppxPackage -Name $env:IDENTITY_NAME
             if (!$installed -or $installed.Status -ne 'Ok') { throw 'Package registration failed' }
-            pwsh -NoProfile -File packaging/test-windows.ps1 -InstalledDirectory $installed.InstallLocation
+            pwsh -NoProfile -File packaging/test-windows.ps1 -AppUserModelId ($installed.PackageFamilyName + '!Midad')
             if ($LASTEXITCODE) { throw 'Installed MSIX editor test failed' }
           } finally {
             Get-AppxPackage -Name $env:IDENTITY_NAME | Remove-AppxPackage
