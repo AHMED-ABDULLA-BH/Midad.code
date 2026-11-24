@@ -1,0 +1,32 @@
+name: Windows desktop
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['docs/**', 'README.md']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  installer:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo test --locked
+      - run: cargo build --locked --release
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (!(Test-Path $compiler)) { choco install nsis -y --no-progress }
+          & $compiler /INPUTCHARSET UTF8 packaging/windows.nsi
+          exit $LASTEXITCODE
+      - name: Test the installed editor
+        shell: pwsh
+        run: ./packaging/test-windows.ps1 -Installer target/Midad-0.5.0-Windows-x64.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Midad-Windows-x64
+          path: |
+            target/Midad-0.5.0-Windows-x64.exe
+            target/studio-windows.png

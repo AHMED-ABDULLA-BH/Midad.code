@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleExecutable</key><string>midad</string>
+<key>CFBundleIconFile</key><string>Midad.icns</string>
+<key>CFBundleIdentifier</key><string>local.midad.studio</string>
+<key>CFBundleName</key><string>مِداد</string>
+<key>CFBundleDisplayName</key><string>مِداد</string>
+<key>CFBundleVersion</key><string>6</string>
+<key>CFBundleShortVersionString</key><string>0.5.0</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>NSHighResolutionCapable</key><true/>
+<key>CFBundleDocumentTypes</key><array>
+<dict><key>CFBundleTypeName</key><string>Midad</string><key>CFBundleTypeExtensions</key><array><string>midad</string></array><key>CFBundleTypeRole</key><string>Editor</string></dict>
+<dict><key>CFBundleTypeName</key><string>KLX</string><key>CFBundleTypeExtensions</key><array><string>klx</string></array><key>CFBundleTypeRole</key><string>Viewer</string><key>LSHandlerRank</key><string>Alternate</string></dict>
+</array>
+<key>NSPrincipalClass</key><string>NSApplication</string>
+</dict></plist>
