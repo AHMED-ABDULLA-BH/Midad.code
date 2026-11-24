@@ -30,3 +30,38 @@ jobs:
           path: |
             target/Midad-0.5.0-Windows-x64.exe
             target/studio-windows.png
+      - name: Build the local MSIX test package
+        shell: pwsh
+        run: ./packaging/build-msix.ps1 -LocalTest
+      - name: Install and exercise the MSIX on the disposable runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $package = Get-Item target/*-LocalTest.msix
+          $signed = Join-Path $env:RUNNER_TEMP 'Midad-test-signed.msix'
+          Copy-Item $package $signed
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Midad Local Test' -CertStoreLocation Cert:\CurrentUser\My
+          $trusted = $null
+          try {
+            $public = Export-Certificate -Cert $cert -FilePath "$env:RUNNER_TEMP/Midad-test.cer"
+            $trusted = Import-Certificate -FilePath $public.FullName -CertStoreLocation Cert:\LocalMachine\TrustedPeople
+            $tool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+              Sort-Object { [version]$_.Directory.Parent.Name } -Descending | Select-Object -First 1
+            & $tool.FullName sign /fd SHA256 /sha1 $cert.Thumbprint $signed
+            if ($LASTEXITCODE) { throw 'Test signing failed' }
+            Add-AppxPackage -Path $signed
+            $installed = Get-AppxPackage -Name Midad.LocalTest
+            if (!$installed -or $installed.Status -ne 'Ok') { throw 'Package registration failed' }
+            pwsh -NoProfile -File packaging/test-windows.ps1 -InstalledDirectory $installed.InstallLocation
+            if ($LASTEXITCODE) { throw 'Installed MSIX editor test failed' }
+          } finally {
+            Get-AppxPackage -Name Midad.LocalTest | Remove-AppxPackage
+            if ($trusted) { Remove-Item "Cert:\LocalMachine\TrustedPeople\$($trusted.Thumbprint)" }
+            Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -DeleteKey
+          }
+          if (Get-AppxPackage -Name Midad.LocalTest) { throw 'Package removal failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Midad-MSIX-LocalTest
+          path: target/*-LocalTest.msix
+          if-no-files-found: error

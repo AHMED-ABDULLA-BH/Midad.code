@@ -1,7 +1,10 @@
-param([Parameter(Mandatory=$true)][string]$Installer)
+param(
+    [Parameter(Mandatory, ParameterSetName='Installer')][string]$Installer,
+    [Parameter(Mandatory, ParameterSetName='Installed')][string]$InstalledDirectory
+)
 $ErrorActionPreference = 'Stop'
 $root = Join-Path ([IO.Path]::GetTempPath()) ("midad-test-" + [guid]::NewGuid().ToString('N'))
-$install = Join-Path $root 'app'
+$install = if ($InstalledDirectory) { $InstalledDirectory } else { Join-Path $root 'app' }
 New-Item -ItemType Directory -Path $root | Out-Null
 $process = $null
 Add-Type -AssemblyName System.Drawing
@@ -35,8 +38,10 @@ function Read-Line([IntPtr]$window) {
     return $s.ToString()
 }
 try {
-    $setup=Start-Process (Resolve-Path $Installer) -ArgumentList '/S',("/D="+$install) -Wait -PassThru
-    if ($setup.ExitCode) { throw "Installer exit $($setup.ExitCode)" }
+    if ($Installer) {
+        $setup=Start-Process (Resolve-Path $Installer) -ArgumentList '/S',("/D="+$install) -Wait -PassThru
+        if ($setup.ExitCode) { throw "Installer exit $($setup.ExitCode)" }
+    }
     $file = Join-Path $root 'Smoke.midad'
     Copy-Item (Get-ChildItem "$PSScriptRoot/../examples/*.midad" | Select-Object -First 1) $file
     $sample=(Get-Content $file -Raw -Encoding UTF8 | ConvertFrom-Json).pages[0].lines[0].content.text
@@ -61,9 +66,12 @@ try {
     if ((Read-Line $process.MainWindowHandle) -ne $edited) { throw 'Edited text was not restored' }
     [void]$process.CloseMainWindow()
     if (!$process.WaitForExit(10000)) { throw 'Reopened window did not close' }
-    $un=Start-Process "$install/Uninstall.exe" -ArgumentList '/S',("_?="+$install) -Wait -PassThru
-    if ($un.ExitCode -or (Test-Path "$install/midad.exe")) { throw 'Uninstall failed' }
-    Write-Host 'Install, open, edit, save, reopen, and uninstall passed.'
+    if ($Installer) {
+        $un=Start-Process "$install/Uninstall.exe" -ArgumentList '/S',("_?="+$install) -Wait -PassThru
+        if ($un.ExitCode -or (Test-Path "$install/midad.exe")) { throw 'Uninstall failed' }
+        Write-Host 'Installer uninstall passed.'
+    }
+    Write-Host 'Open, edit, save and reopen passed.'
 } finally {
     if ($process -and !$process.HasExited) {$process.Kill()}
     Remove-Item $root -Recurse -Force -ErrorAction SilentlyContinue
