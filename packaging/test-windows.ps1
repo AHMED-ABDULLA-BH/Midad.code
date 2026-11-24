@@ -39,6 +39,7 @@ public static class NativeStudio {
 }
 '@
 function Launch([string]$file) {
+    $windowTitle = [IO.Path]::GetFileNameWithoutExtension($file)
     if ($AppUserModelId) {
         $p = Get-Process -Id ([NativeStudio]::Activate($AppUserModelId, $file))
     } else {
@@ -47,7 +48,7 @@ function Launch([string]$file) {
     for ($i=0; $i -lt 100; $i++) {
         $p.Refresh()
         if ($p.HasExited) { throw 'The editor exited during startup' }
-        if ($p.MainWindowHandle -ne 0 -and $p.MainWindowTitle -like '*Smoke*') { return $p }
+        if ($p.MainWindowHandle -ne 0 -and $p.MainWindowTitle.Contains($windowTitle)) { return $p }
         Start-Sleep -Milliseconds 150
     }
     throw 'Document window did not open'
@@ -62,7 +63,7 @@ try {
         $setup=Start-Process (Resolve-Path $Installer) -ArgumentList '/S',("/D="+$install) -Wait -PassThru
         if ($setup.ExitCode) { throw "Installer exit $($setup.ExitCode)" }
     }
-    $file = Join-Path $root 'Smoke.midad'
+    $file = Join-Path $root 'لوحة مداد.midad'
     Copy-Item (Get-ChildItem "$PSScriptRoot/../examples/*.midad" | Select-Object -First 1) $file
     $sample=(Get-Content $file -Raw -Encoding UTF8 | ConvertFrom-Json).pages[0].lines[0].content.text
     $process=Launch $file
@@ -81,6 +82,16 @@ try {
     try { $captured=[NativeStudio]::PrintWindow($w,$dc,2) } finally { $g.ReleaseHdc($dc);$g.Dispose() }
     if (!$captured -and $AppUserModelId) { throw 'Store screenshot capture failed' }
     if($captured){ $bmp.Save((Join-Path (Resolve-Path "$PSScriptRoot/../target").Path $screenshot),[Drawing.Imaging.ImageFormat]::Png) }
+    if ($AppUserModelId -and ($bmp.Width -lt 1366 -or $bmp.Height -lt 768)) {
+        # Keep the captured window at its native pixel size on small CI displays.
+        $canvas = [Drawing.Bitmap]::new([Math]::Max(1440,$bmp.Width),[Math]::Max(900,$bmp.Height))
+        $graphics = [Drawing.Graphics]::FromImage($canvas)
+        try {
+            $graphics.Clear([Drawing.Color]::FromArgb(231,234,233))
+            $graphics.DrawImageUnscaled($bmp, [int](($canvas.Width-$bmp.Width)/2), [int](($canvas.Height-$bmp.Height)/2))
+            $canvas.Save((Join-Path (Resolve-Path "$PSScriptRoot/../target").Path $screenshot),[Drawing.Imaging.ImageFormat]::Png)
+        } finally { $graphics.Dispose(); $canvas.Dispose() }
+    }
     $bmp.Dispose()
     $edited='حبر مداد'
     [void][NativeStudio]::SendMessageW([NativeStudio]::GetDlgItem($w,101),12,[IntPtr]::Zero,$edited)
