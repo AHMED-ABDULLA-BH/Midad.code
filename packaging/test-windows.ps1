@@ -17,6 +17,7 @@ public static class NativeStudio {
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr SendMessageW(IntPtr w, uint m, IntPtr a, string text);
     [DllImport("user32.dll", EntryPoint="SendMessageW")] public static extern IntPtr Command(IntPtr w, uint m, IntPtr a, IntPtr b);
     [DllImport("user32.dll", CharSet=CharSet.Unicode, EntryPoint="SendMessageW")] public static extern IntPtr Read(IntPtr w, uint m, IntPtr a, StringBuilder s);
+    [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr w, int x, int y, int width, int height, bool repaint);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr w, IntPtr dc, uint flags);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr w, out Rect r);
     public struct Rect { public int Left, Top, Right, Bottom; }
@@ -48,13 +49,19 @@ try {
     $process=Launch $file
     $w=$process.MainWindowHandle
     if ((Read-Line $w) -ne $sample) { throw 'Editor did not load the example text' }
+    $screenshot = 'studio-windows.png'
+    if ($InstalledDirectory) {
+        if (![NativeStudio]::MoveWindow($w, 0, 0, 1440, 900, $true)) { throw 'Could not resize the Store screenshot window' }
+        $screenshot = 'studio-windows-store.png'
+    }
     $bounds=New-Object 'NativeStudio+Rect'
     [void][NativeStudio]::GetWindowRect($w,[ref]$bounds)
     $bmp=[Drawing.Bitmap]::new($bounds.Right-$bounds.Left,$bounds.Bottom-$bounds.Top)
     $g=[Drawing.Graphics]::FromImage($bmp)
     $dc=$g.GetHdc()
     try { $captured=[NativeStudio]::PrintWindow($w,$dc,2) } finally { $g.ReleaseHdc($dc);$g.Dispose() }
-    if($captured){ $bmp.Save((Join-Path (Resolve-Path "$PSScriptRoot/../target").Path 'studio-windows.png'),[Drawing.Imaging.ImageFormat]::Png) }
+    if (!$captured -and $InstalledDirectory) { throw 'Store screenshot capture failed' }
+    if($captured){ $bmp.Save((Join-Path (Resolve-Path "$PSScriptRoot/../target").Path $screenshot),[Drawing.Imaging.ImageFormat]::Png) }
     $bmp.Dispose()
     $edited='حبر مداد'
     [void][NativeStudio]::SendMessageW([NativeStudio]::GetDlgItem($w,101),12,[IntPtr]::Zero,$edited)

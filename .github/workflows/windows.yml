@@ -4,6 +4,19 @@ on:
     branches: [main]
     paths-ignore: ['docs/**', 'README.md']
   workflow_dispatch:
+    inputs:
+      identity_name:
+        description: Reserved Package/Identity/Name (leave empty for a local test)
+        type: string
+      publisher:
+        description: Package/Identity/Publisher from Partner Center
+        type: string
+      publisher_display_name:
+        description: Publisher display name from Partner Center
+        type: string
+      display_name:
+        description: Reserved app display name
+        type: string
 permissions:
   contents: read
 jobs:
@@ -30,17 +43,33 @@ jobs:
           path: |
             target/Midad-0.5.0-Windows-x64.exe
             target/studio-windows.png
-      - name: Build the local MSIX test package
+      - name: Build the MSIX
         shell: pwsh
-        run: ./packaging/build-msix.ps1 -LocalTest
+        env:
+          IDENTITY_NAME: ${{ inputs.identity_name }}
+          PUBLISHER: ${{ inputs.publisher }}
+          PUBLISHER_DISPLAY_NAME: ${{ inputs.publisher_display_name }}
+          DISPLAY_NAME: ${{ inputs.display_name }}
+        run: |
+          if ($env:IDENTITY_NAME -or $env:PUBLISHER -or $env:PUBLISHER_DISPLAY_NAME -or $env:DISPLAY_NAME) {
+            if (!$env:IDENTITY_NAME -or !$env:PUBLISHER -or !$env:PUBLISHER_DISPLAY_NAME -or !$env:DISPLAY_NAME) {
+              throw 'All four Partner Center values are required for a Store build.'
+            }
+            ./packaging/build-msix.ps1 -IdentityName $env:IDENTITY_NAME -Publisher $env:PUBLISHER -PublisherDisplayName $env:PUBLISHER_DISPLAY_NAME -DisplayName $env:DISPLAY_NAME
+          } else {
+            ./packaging/build-msix.ps1 -LocalTest
+          }
       - name: Install and exercise the MSIX on the disposable runner
         shell: powershell
+        env:
+          IDENTITY_NAME: ${{ inputs.identity_name || 'Midad.LocalTest' }}
+          PUBLISHER: ${{ inputs.publisher || 'CN=Midad Local Test' }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $package = Get-Item target/*-LocalTest.msix
+          $package = Get-Item target/*.msix
           $signed = Join-Path $env:RUNNER_TEMP 'Midad-test-signed.msix'
           Copy-Item $package $signed
-          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Midad Local Test' -CertStoreLocation Cert:\CurrentUser\My
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $env:PUBLISHER -CertStoreLocation Cert:\CurrentUser\My
           $trusted = $null
           try {
             $public = Export-Certificate -Cert $cert -FilePath "$env:RUNNER_TEMP/Midad-test.cer"
@@ -50,18 +79,20 @@ jobs:
             & $tool.FullName sign /fd SHA256 /sha1 $cert.Thumbprint $signed
             if ($LASTEXITCODE) { throw 'Test signing failed' }
             Add-AppxPackage -Path $signed
-            $installed = Get-AppxPackage -Name Midad.LocalTest
+            $installed = Get-AppxPackage -Name $env:IDENTITY_NAME
             if (!$installed -or $installed.Status -ne 'Ok') { throw 'Package registration failed' }
             pwsh -NoProfile -File packaging/test-windows.ps1 -InstalledDirectory $installed.InstallLocation
             if ($LASTEXITCODE) { throw 'Installed MSIX editor test failed' }
           } finally {
-            Get-AppxPackage -Name Midad.LocalTest | Remove-AppxPackage
+            Get-AppxPackage -Name $env:IDENTITY_NAME | Remove-AppxPackage
             if ($trusted) { Remove-Item "Cert:\LocalMachine\TrustedPeople\$($trusted.Thumbprint)" }
             Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -DeleteKey
           }
-          if (Get-AppxPackage -Name Midad.LocalTest) { throw 'Package removal failed' }
+          if (Get-AppxPackage -Name $env:IDENTITY_NAME) { throw 'Package removal failed' }
       - uses: actions/upload-artifact@v4
         with:
-          name: Midad-MSIX-LocalTest
-          path: target/*-LocalTest.msix
+          name: Midad-MSIX-${{ inputs.identity_name && 'Store' || 'LocalTest' }}
+          path: |
+            target/*.msix
+            target/studio-windows-store.png
           if-no-files-found: error
